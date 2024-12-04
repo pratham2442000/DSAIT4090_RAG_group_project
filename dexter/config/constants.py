@@ -12,6 +12,7 @@ class Dataset:
     MUSIQUEQA="musiqueqa"
     OTTQA = "ottqa"
     StrategyQA = "strategyqa"
+    myDataset = "data"
 
 class Separators:
     TABLE_ROW_SEP = '\n'

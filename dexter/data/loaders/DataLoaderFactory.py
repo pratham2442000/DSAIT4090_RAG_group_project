@@ -7,7 +7,7 @@ from dexter.data.loaders.OTTQADataLoader import OTTQADataLoader
 from dexter.data.loaders.TATQADataLoader import TATQADataLoader
 from dexter.data.loaders.WikiMultihopQADataLoader import WikiMultihopQADataLoader
 from dexter.data.loaders.StrategyQADataLoader import StrategyQADataLoader
-
+from dexter.data.loaders.mydataset import MyDataLoader
 
 
 class DataLoaderFactory:
@@ -37,6 +37,8 @@ class DataLoaderFactory:
             loader = OTTQADataLoader
         elif Dataset.StrategyQA in dataloader_name:
             loader = StrategyQADataLoader
+        elif Dataset.myDataset in dataloader_name:
+            loader = MyDataLoader
         else:
             raise NotImplemented(f"{dataloader_name} not implemented yet.")
         return loader(dataset=dataloader_name, config_path=config_path,
