@@ -1,3 +1,19 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     custom_cell_magics: kql
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.11.2
+#   kernelspec:
+#     display_name: dsait4090
+#     language: python
+#     name: python3
+# ---
+
 # %% [markdown]
 # # Contriever Inference
 
@@ -14,28 +30,21 @@ from dexter.data.datastructures.hyperparameters.dpr import DenseHyperParams
 # reload(RetrieverDataset)
 
 
-
-
-if __name__ == "__main__":
-
-    config_instance = DenseHyperParams(query_encoder_path="facebook/contriever",
-                                     document_encoder_path="facebook/contriever"
-                                     ,batch_size=32,show_progress_bar=True)
-
-    loader = RetrieverDataset("data","wiki_musique_corpus","config.ini",Split.DEV,tokenizer=None)
-    queries, qrels, corpus = loader.qrels()
-    
-    
-    con = Contriever(config_instance)
-
-
-    similarity_measure = CosScore()
-    response = con.retrieve(corpus,queries,100,similarity_measure)
-    print("indices",len(response))
-    metrics = RetrievalMetrics(k_values=[1,3,5])
-    print(metrics.evaluate_retrieval(qrels=qrels,results=response))
-
 # %%
 
+config_instance = DenseHyperParams(query_encoder_path="facebook/contriever",
+                                    document_encoder_path="facebook/contriever"
+                                    ,batch_size=32,show_progress_bar=True)
+
+loader = RetrieverDataset("wikimultihopqa","wiki_musique_corpus","config.ini",Split.DEV,tokenizer=None)
+queries, qrels, corpus = loader.qrels()
 
 
+con = Contriever(config_instance)
+
+
+similarity_measure = CosScore()
+response = con.retrieve(corpus,queries,100,similarity_measure)
+print("indices",len(response))
+metrics = RetrievalMetrics(k_values=[1,3,5])
+print(metrics.evaluate_retrieval(qrels=qrels,results=response))

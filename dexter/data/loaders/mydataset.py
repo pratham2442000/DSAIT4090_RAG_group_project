@@ -1,8 +1,8 @@
 from dexter.config.constants import Split
-from dexter.data.datastructures.answer import AmbigNQAnswer, Answer
+from dexter.data.datastructures.answer import Answer
 from dexter.data.datastructures.question import Question
 from dexter.data.datastructures.evidence import Evidence
-from dexter.data.datastructures.sample import AmbigNQSample
+from dexter.data.datastructures.sample import Sample
 from dexter.data.loaders.BaseDataLoader import GenericDataLoader
 import tqdm
 
@@ -12,7 +12,7 @@ class MyDataLoader(GenericDataLoader):
     def __init__(
         self,
         dataset: str,
-        tokenizer="bert-base-uncased",
+        tokenizer=None,
         config_path=None,
         split=Split.TRAIN,
         batch_size=None,
@@ -20,18 +20,19 @@ class MyDataLoader(GenericDataLoader):
     ):
         self.corpus = corpus
         self.config_path = config_path
-        super().__init__(dataset, split)
+        super().__init__(dataset, tokenizer, config_path, split, batch_size)
         
     def load_raw_dataset(self, split):
         dataset = self.load_json(split)
-        for i in tqdm.tqdm(range(len(dataset))):
+        print("loading mydataset")
+        for index,i in enumerate(tqdm.tqdm(range(len(dataset)))):
             sample = dataset[i]
-            question = Question(sample['question'])
+            question = Question(sample['question'],index)
             evidences = []
             for evidence in sample['evidences']:
-                evidences.append(Evidence(evidence[0], evidence))
-            answers = Answer(sample['answer'], None)
-            self.raw_data.append(AmbigNQSample(question, evidences, answers))
-
+                evidences.append(Evidence(title=evidence[0], text=evidence, idx=index))
+            answers = Answer(sample['answer'], index)
+            self.raw_data.append(Sample(idx=index,question=question, evidences=evidences, answer=answers))
+        print("dataset loaded, moving on to other init")
 
 
