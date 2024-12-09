@@ -163,3 +163,5 @@ cython_debug/
 data/*.json
 *.ipynb
 *.json
+
+.DS_Store
