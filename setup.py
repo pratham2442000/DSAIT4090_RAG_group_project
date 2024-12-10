@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-with open("../../../../../../../Downloads/BCQA-05F9/README.md", mode="r", encoding="utf-8") as readme_file:
+with open("README_dexter.md", mode="r", encoding="utf-8") as readme_file:
     readme = readme_file.read()
 package_data = {
     "": ["*.cpp", "*.cu"],

@@ -14,7 +14,11 @@ For data
     └── wiki_musique_corpus.json
 ```
 
+For setup follow the instructions in README_dexter.md, specifically:
+- Create a conda environment conda create -n bcqa
+- pip install -e .
 
+Note: use python version 3.10
 
 Our dataset follows the format of data.
 Each sample has the following keys:
