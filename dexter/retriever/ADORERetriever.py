@@ -52,7 +52,7 @@ def compute_loss_for_query_and_hard_negatives(q_idx, relevant_doc_idxs, all_hard
 
             switched_rr = calculate_rr(merged_doc_idxs, relevant_doc_idxs_set)
 
-            loss += float((orig_rr - switched_rr) * l_r)
+            loss += float((switched_rr - orig_rr) * l_r)
 
     return loss / (len(relevant_doc_idxs) * len(relevant_doc_idxs_set))
 
