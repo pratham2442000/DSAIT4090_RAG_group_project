@@ -49,6 +49,7 @@ class HfRetriever(BaseRetriver):
         print("token_emb",token_emb[0].shape)
         sentence_emb = self.mean_pooling(token_emb[0],tokenized_questions["attention_mask"])
         print("sentence_emb",sentence_emb.shape)
+        assert sentence_emb.shape[0] == len(queries)
         return sentence_emb
     
     def encode_corpus(self, 
@@ -79,6 +80,7 @@ class HfRetriever(BaseRetriver):
         pbar.close()
         context_embeddings = torch.cat(context_embeddings,dim=0)
         print("context_embeddings",context_embeddings.shape)
+        assert context_embeddings.shape[0] == len(corpus)
         return context_embeddings
 
     def load_index_if_available(self)->Tuple[Any,bool]:
