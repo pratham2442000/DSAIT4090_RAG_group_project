@@ -44,7 +44,7 @@ def compute_loss_for_query_and_hard_negatives(q_idx, relevant_doc_idxs, all_hard
 
     for rel_doc_idx in relevant_doc_idxs:
         for hard_negative_idx in all_hard_negative_idxs:
-            l_r = np.log(1 + np.exp(similarity_scores[q_idx, hard_negative_idx] - similarity_scores[q_idx, rel_doc_idx]))
+            l_r = torch.log(1 + torch.exp(similarity_scores[q_idx, hard_negative_idx] - similarity_scores[q_idx, rel_doc_idx]))
 
             orig_rr = calculate_rr(merged_doc_idxs, relevant_doc_idxs_set)
 
@@ -56,7 +56,7 @@ def compute_loss_for_query_and_hard_negatives(q_idx, relevant_doc_idxs, all_hard
 
             switched_rr = calculate_rr(merged_doc_idxs, relevant_doc_idxs_set)
 
-            loss += float((switched_rr - orig_rr) * l_r)
+            loss += (switched_rr - orig_rr) * l_r
 
     return loss / (len(relevant_doc_idxs) * len(all_hard_negative_idxs))
 
