@@ -70,7 +70,7 @@ def compute_loss_for_query_and_hard_negatives(q_idx, relevant_doc_idxs, all_hard
 
             switched_rr = calculate_rr(merged_doc_idxs, relevant_doc_idxs_set)
 
-            loss += (switched_rr - orig_rr) * l_r
+            loss += ((switched_rr - orig_rr) * l_r)
 
     return loss / (len(relevant_doc_idxs) * len(all_hard_negative_idxs))
 
@@ -188,7 +188,7 @@ class ADORERetriever(HfRetriever):
 
                     batch_total_loss += compute_loss_for_query_and_hard_negatives(q_idx, relevant_docs_raw_idxs[query.id()], all_hard_negative_idxs, similarity_scores)
 
-                loss = torch.Tensor(batch_total_loss / len(cur_queries), device=device)
+                loss = batch_total_loss / len(cur_queries)
                 loss.backward()
                 optimizer.step()
                 lr_scheduler.step()
