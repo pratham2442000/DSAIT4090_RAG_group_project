@@ -70,7 +70,7 @@ def compute_loss_for_query_and_hard_negatives(q_idx, relevant_doc_idxs, all_hard
 
             switched_rr = calculate_rr(merged_doc_idxs, relevant_doc_idxs_set)
 
-            loss += ((switched_rr - orig_rr) * l_r)
+            loss += (float(switched_rr - orig_rr) * l_r)
 
     return loss / (len(relevant_doc_idxs) * len(all_hard_negative_idxs))
 
@@ -165,12 +165,16 @@ class ADORERetriever(HfRetriever):
                 cur_queries = queries[i : i + self.batch_size]
                 query_embeddings = self.encode_queries(cur_queries)
 
+                print(query_embeddings.requires_grad)
+                print(self.passage_embeddings.requires_grad)
+
                 # TENSOR SHAPE IS |Q| * |C|
                 similarity_scores = similarity_metric.evaluate(query_embeddings, self.passage_embeddings)
 
+                print(similarity_scores[0][0].requires_grad)
+
                 # We take +20 since relevant docs might be in the topk. We always want the topk to be hard negatives only.
                 top_k_values, top_k_idxs =torch.topk(similarity_scores, min(top_k + 20, len(similarity_scores[1])), dim=1, largest=True, sorted=True)
-                top_k_idxs = top_k_idxs.cpu().numpy()
                 # top_k_values = top_k_values.cpu().numpy()
                 batch_total_loss = 0
 
@@ -197,6 +201,20 @@ class ADORERetriever(HfRetriever):
 
         # take it out of training mode
         self.question_encoder.eval()
+
+    def encode_queries(self,
+                       queries: List[Question],
+                       batch_size: int = 16,
+                         **kwargs) -> Union[List[Tensor], np.ndarray, Tensor]:
+        with torch.no_grad():
+            tokenized_questions = self.question_tokenizer([query.text() for query in queries], padding=True, truncation=True, return_tensors='pt').to("cuda")
+
+        token_emb =  self.question_encoder(**tokenized_questions)
+        print("token_emb",token_emb[0].shape)
+        sentence_emb = self.mean_pooling(token_emb[0],tokenized_questions["attention_mask"])
+        print("sentence_emb",sentence_emb.shape)
+        assert sentence_emb.shape[0] == len(queries)
+        return sentence_emb
 
     def save_query_encoder(self, save_directory : str) -> None:
         """
