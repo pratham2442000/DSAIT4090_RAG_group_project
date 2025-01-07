@@ -95,7 +95,7 @@ class ADORERetriever(HfRetriever):
 
         if self.passage_embeddings is None:
             print("BUILDING PASSAGE EMBEDDINGS FOR ADORE TRAINING - THIS MIGHT TAKE A WHILE")
-            directory = "indices/corpus"
+            directory = "indices/adore/corpus"
             filename = os.path.join(directory, "index.joblib")
             npy_filename = os.path.join(directory, "npy_index.npy")
 
@@ -158,20 +158,20 @@ class ADORERetriever(HfRetriever):
         self.question_encoder.to(device)
         self.question_encoder.train()
 
-        progress_bar = tqdm(range(num_training_steps))
+        progress_bar = tqdm(range(num_training_steps), "Epoch progress")
 
         for epoch in range(n_epochs):
             for i in range(0, len(queries), self.batch_size):
                 cur_queries = queries[i : i + self.batch_size]
                 query_embeddings = self.encode_queries(cur_queries)
 
-                print(query_embeddings.requires_grad)
-                print(self.passage_embeddings.requires_grad)
+                # print(query_embeddings.requires_grad)
+                # print(self.passage_embeddings.requires_grad)
 
                 # TENSOR SHAPE IS |Q| * |C|
                 similarity_scores = similarity_metric.evaluate(query_embeddings, self.passage_embeddings)
 
-                print(similarity_scores[0][0].requires_grad)
+                # print(similarity_scores[0][0].requires_grad)
 
                 # We take +20 since relevant docs might be in the topk. We always want the topk to be hard negatives only.
                 top_k_values, top_k_idxs =torch.topk(similarity_scores, min(top_k + 20, len(similarity_scores[1])), dim=1, largest=True, sorted=True)
@@ -210,9 +210,9 @@ class ADORERetriever(HfRetriever):
             tokenized_questions = self.question_tokenizer([query.text() for query in queries], padding=True, truncation=True, return_tensors='pt').to("cuda")
 
         token_emb =  self.question_encoder(**tokenized_questions)
-        print("token_emb",token_emb[0].shape)
+        # print("token_emb",token_emb[0].shape)
         sentence_emb = self.mean_pooling(token_emb[0],tokenized_questions["attention_mask"])
-        print("sentence_emb",sentence_emb.shape)
+        # print("sentence_emb",sentence_emb.shape)
         assert sentence_emb.shape[0] == len(queries)
         return sentence_emb
 

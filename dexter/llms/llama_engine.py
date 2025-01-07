@@ -1,16 +1,20 @@
 import torch
 import transformers
-import os
+# import os
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from huggingface_hub import login
-access_token_read = os.environ["huggingface_token"]
-login(token = access_token_read)
+# from huggingface_hub import login
+# access_token_read = os.environ["huggingface_token"]
+# login(token = access_token_read)
 
 class LlamaEngine:
 
     def __init__(self, data, model_name="meta-llama/Llama-2-7b-chat-hf", temperature=0.3, top_n=1, max_new_tokens=256):
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+        # Feel free to comment this (if not using local llama)
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_name, torch_dtype=torch.float16)
+
         self.temperature = temperature
         self.data = data
         self.top_n = top_n

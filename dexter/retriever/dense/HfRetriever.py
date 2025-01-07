@@ -46,9 +46,9 @@ class HfRetriever(BaseRetriver):
         with torch.no_grad():
             tokenized_questions = self.question_tokenizer([query.text() for query in queries], padding=True, truncation=True, return_tensors='pt').to("cuda")
             token_emb =  self.question_encoder(**tokenized_questions)
-        print("token_emb",token_emb[0].shape)
+        # print("token_emb",token_emb[0].shape)
         sentence_emb = self.mean_pooling(token_emb[0],tokenized_questions["attention_mask"])
-        print("sentence_emb",sentence_emb.shape)
+        # print("sentence_emb",sentence_emb.shape)
         assert sentence_emb.shape[0] == len(queries)
         return sentence_emb
     
@@ -67,7 +67,7 @@ class HfRetriever(BaseRetriver):
         context_embeddings = []
         index = 0
         pbar = tqdm(total = len(contexts))
-        print("Starting encoding of contexts....")
+        # print("Starting encoding of contexts....")
         with torch.no_grad():
             while index < len(contexts):
                 samples = contexts[index:index+self.batch_size]
@@ -79,7 +79,7 @@ class HfRetriever(BaseRetriver):
                 pbar.update(self.batch_size)
         pbar.close()
         context_embeddings = torch.cat(context_embeddings,dim=0)
-        print("context_embeddings",context_embeddings.shape)
+        # print("context_embeddings",context_embeddings.shape)
         assert context_embeddings.shape[0] == len(corpus)
         return context_embeddings
 
