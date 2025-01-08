@@ -16,15 +16,18 @@ from dexter.data.datastructures.hyperparameters.dpr import DenseHyperParams
 from dexter.data.datastructures.question import Question
 from dexter.data.datastructures.evidence import Evidence
 from dexter.retriever.dense.HfRetriever import HfRetriever
-from dexter.utils.metrics.SimilarityMatch import CosineSimilarity
+from dexter.utils.metrics.SimilarityMatch import CosineSimilarity, DotScore
 
-similarity_metric = CosineSimilarity()
+RANKING_CUTOFF = 10
+similarity_metric = DotScore()
+log_values_for_ndcg = 1 / torch.log(torch.arange(2,2 + RANKING_CUTOFF,dtype=torch.float,device="cuda" if torch.cuda.is_available() else "cpu"))
+
 
 def calculate_rr(all_doc_idxs, relevant_doc_idxs_set):
     rr = 0
     for rank, doc_idx in enumerate(all_doc_idxs, start=1):
-        # If a relevant doc is not in the first 20 then we punish the model severely.
-        if rank > 20:
+        # If a relevant doc is not in the first 10 then we punish the model severely.
+        if rank > RANKING_CUTOFF:
             break
 
         if doc_idx in relevant_doc_idxs_set:
@@ -32,45 +35,70 @@ def calculate_rr(all_doc_idxs, relevant_doc_idxs_set):
             break
     return rr
 
-def compute_loss_for_query_and_hard_negatives(q_idx, relevant_doc_idxs, all_hard_negative_idxs, similarity_scores):
+def calculate_ncdg_10(sorted_all_idxs: Tensor, similarity_scores_1d: Tensor, sorted_relevant_idxs: Tensor):
     """
-    Computes the loss for 1 query, it considers all pairs of relevant docs and hard negatives and computes the loss as specified in the paper.
-    We use RR. It averages across docs to make MRR
+    All 1d tensors
+
     Args:
-        q_idx: The raw q_idx which corresponds to the row in the similarity_scores tensor
-        relevant_doc_idxs: The list of relevant doc indexes which corresponds to the column in similarity_scores tensor
-        all_hard_negative_idxs:  The list of dynamic hard negative indexes sampled at the current step which corresponds to the column in similarity_scores tensor
-        similarity_scores:  The tensor which has size |Batch size of queries| x |# passages in corpus| tensor
+        sorted_all_idxs: IDXS of hard-negatives and relevant docs combined sorted according to similarity scores
+        similarity_scores_1d: The similarity scores for the whole corpus for that query in no particular order (1D tensor)
+        sorted_relevant_idxs: IDXS of relevant docs sorted according to similarity scores
 
-    Returns: the pairwise loss as described above.
+    Returns: the NCDG@10
+
     """
-    relevant_doc_idxs_set = set(relevant_doc_idxs)
+    sorted_scores = similarity_scores_1d[sorted_all_idxs]
+    dcg = torch.sum(sorted_scores[:RANKING_CUTOFF] * log_values_for_ndcg)
 
-    # sort descendingly in order of similarity scores
-    merged_doc_idxs = sorted(relevant_doc_idxs + all_hard_negative_idxs, key=lambda idx: float(similarity_scores[q_idx, idx]), reverse=True)
+    ideal_order = torch.cat((sorted_relevant_idxs, sorted_all_idxs[~torch.isin(sorted_all_idxs, sorted_relevant_idxs)]))
+    sorted_ideal_order_scores = similarity_scores_1d[ideal_order]
+    idcg = torch.sum(sorted_ideal_order_scores[:RANKING_CUTOFF] * log_values_for_ndcg)
 
-    idxs_to_pos = dict()
+    return dcg / idcg
 
-    for i in range(len(merged_doc_idxs)):
-        idxs_to_pos[merged_doc_idxs[i]] = i
+
+def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_hard_negative_idxs: Tensor, similarity_scores_1d: Tensor):
+
+
+    relevant_scores = similarity_scores_1d[relevant_doc_idxs]
+    hard_negative_scores = similarity_scores_1d[all_hard_negative_idxs]
+
+    all_scores = torch.cat([relevant_scores, hard_negative_scores])
+    all_doc_idxs = torch.cat([relevant_doc_idxs, all_hard_negative_idxs])
+    sorted_temp = torch.argsort(all_scores, descending=True)
+    sorted_all_idxs = all_doc_idxs[sorted_temp]
+    sorted_relevant_idxs = relevant_doc_idxs[torch.argsort(similarity_scores_1d[relevant_doc_idxs], descending=True)]
 
     loss = 0
+    # print(f"length rel_docs: {len(relevant_doc_idxs)}")
+    # print(f"length hard_docs: {len(all_hard_negative_idxs)}")
 
     for rel_doc_idx in relevant_doc_idxs:
         for hard_negative_idx in all_hard_negative_idxs:
-            l_r = torch.log(1 + torch.exp(similarity_scores[q_idx, hard_negative_idx] - similarity_scores[q_idx, rel_doc_idx]))
+            l_r = torch.log(1 + torch.exp(similarity_scores_1d[hard_negative_idx] - similarity_scores_1d[rel_doc_idx]))
 
-            orig_rr = calculate_rr(merged_doc_idxs, relevant_doc_idxs_set)
+            orig_ndcg_10 = calculate_ncdg_10(
+                sorted_all_idxs=sorted_all_idxs,
+                similarity_scores_1d=similarity_scores_1d,
+                sorted_relevant_idxs=sorted_relevant_idxs
+            )
 
-            relevant_pos = idxs_to_pos[rel_doc_idx]
-            negative_pos = idxs_to_pos[hard_negative_idx]
+            relevant_pos = torch.where(sorted_all_idxs == rel_doc_idx)
+            negative_pos = torch.where(sorted_all_idxs == hard_negative_idx)
 
-            merged_doc_idxs[relevant_pos] = hard_negative_idx
-            merged_doc_idxs[negative_pos] = rel_doc_idx
+            sorted_all_idxs[relevant_pos] = hard_negative_idx
+            sorted_all_idxs[negative_pos] = rel_doc_idx
 
-            switched_rr = calculate_rr(merged_doc_idxs, relevant_doc_idxs_set)
+            switched_ndcg_10 =  calculate_ncdg_10(
+                sorted_all_idxs=sorted_all_idxs,
+                similarity_scores_1d=similarity_scores_1d,
+                sorted_relevant_idxs=sorted_relevant_idxs
+            )
 
-            loss += (float(switched_rr - orig_rr) * l_r)
+            sorted_all_idxs[relevant_pos] = rel_doc_idx
+            sorted_all_idxs[negative_pos] = hard_negative_idx
+
+            loss += ((switched_ndcg_10 - orig_ndcg_10) * l_r)
 
     return loss / (len(relevant_doc_idxs) * len(all_hard_negative_idxs))
 
@@ -141,14 +169,15 @@ class ADORERetriever(HfRetriever):
         else:
             self.passage_embeddings = self.passage_embeddings.to(device)
 
-        # This takes roughly 2-3 minutes on the corpus since it's CPU bound.
-        # It maps queries to doc positions (NOT DOC IDS)!
-        relevant_docs_raw_idxs = dict() #
+        qrels_tensor_dict = dict()
+
+        # Pre compute locations
         for query in queries:
-            relevant_docs_raw_idxs[query.id()] = []
-            for raw_doc_idx, doc in enumerate(corpus):
-                if doc.id() in qrels[query.id()]:
-                    relevant_docs_raw_idxs[query.id()].append(raw_doc_idx)
+            qrels_tensor_dict[query.id()] = torch.tensor(
+                [int(x) for x in qrels[query.id()].keys()],
+                device=device,
+                dtype=torch.int64
+            )
 
         num_training_steps = n_epochs * int(math.ceil(len(queries) / self.batch_size))
         optimizer = AdamW(self.question_encoder.parameters(), lr=self.config.learning_rate)
@@ -165,34 +194,31 @@ class ADORERetriever(HfRetriever):
                 cur_queries = queries[i : i + self.batch_size]
                 query_embeddings = self.encode_queries(cur_queries)
 
-                # print(query_embeddings.requires_grad)
-                # print(self.passage_embeddings.requires_grad)
-
-                # TENSOR SHAPE IS |Q| * |C|
+                # TENSOR SHAPE IS |Q| (batch_size) * |C| (whole corpus size)
                 similarity_scores = similarity_metric.evaluate(query_embeddings, self.passage_embeddings)
-
-                # print(similarity_scores[0][0].requires_grad)
 
                 # We take +20 since relevant docs might be in the topk. We always want the topk to be hard negatives only.
                 top_k_values, top_k_idxs =torch.topk(similarity_scores, min(top_k + 20, len(similarity_scores[1])), dim=1, largest=True, sorted=True)
-                # top_k_values = top_k_values.cpu().numpy()
                 batch_total_loss = 0
 
                 for q_idx, query in enumerate(cur_queries):
                     # For each query in the batch, retrieve the top-k hard negatives
-                    all_hard_negative_idxs= [
-                        doc_raw_idx
-                        for doc_raw_idx in top_k_idxs[q_idx]
-                        if corpus[doc_raw_idx].id() not in qrels[query.id()]
-                    ]
+                    hard_negative_mask = ~torch.isin(top_k_idxs[q_idx], qrels_tensor_dict[query.id()])
+                    all_hard_negative_idxs = top_k_idxs[q_idx][hard_negative_mask]
 
                     assert len(all_hard_negative_idxs) >= top_k
+
                     # we take the top_k and eliminate the +20 part, this will only have hard-negatives
                     all_hard_negative_idxs = all_hard_negative_idxs[:top_k]
 
-                    batch_total_loss += compute_loss_for_query_and_hard_negatives(q_idx, relevant_docs_raw_idxs[query.id()], all_hard_negative_idxs, similarity_scores)
+                    batch_total_loss += compute_loss_for_query_and_hard_negatives(
+                        relevant_doc_idxs=qrels_tensor_dict[query.id()],
+                        all_hard_negative_idxs=all_hard_negative_idxs,
+                        similarity_scores_1d=similarity_scores[q_idx]
+                    )
 
                 loss = batch_total_loss / len(cur_queries)
+                print(f"Loss: {loss}")
                 loss.backward()
                 optimizer.step()
                 lr_scheduler.step()
