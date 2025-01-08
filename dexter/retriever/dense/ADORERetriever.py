@@ -70,8 +70,6 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
     sorted_relevant_idxs = relevant_doc_idxs[torch.argsort(similarity_scores_1d[relevant_doc_idxs], descending=True)]
 
     loss = 0
-    # print(f"length rel_docs: {len(relevant_doc_idxs)}")
-    # print(f"length hard_docs: {len(all_hard_negative_idxs)}")
 
     for rel_doc_idx in relevant_doc_idxs:
         for hard_negative_idx in all_hard_negative_idxs:
