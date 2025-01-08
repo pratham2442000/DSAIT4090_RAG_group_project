@@ -21,7 +21,7 @@ from dexter.utils.metrics.SimilarityMatch import CosineSimilarity, DotScore
 
 RANKING_CUTOFF = 10
 similarity_metric = CosineSimilarity()
-ranks = torch.arange(1, RANKING_CUTOFF + 1, device='cuda' if torch.cuda.is_available() else 'cpu')
+ranks = torch.arange(1, RANKING_CUTOFF + 1, dtype=torch.float, device='cuda' if torch.cuda.is_available() else 'cpu')
 
 def calculate_ap_10(top_k_idxs_1d: Tensor, relevant_doc_idxs: Tensor) -> Tensor:
 
@@ -29,8 +29,13 @@ def calculate_ap_10(top_k_idxs_1d: Tensor, relevant_doc_idxs: Tensor) -> Tensor:
     relevant_mask = torch.isin(top_10_idxs, relevant_doc_idxs).float()
     cum_relevance = torch.cumsum(relevant_mask, dim=0)
     precisions = cum_relevance / ranks
-
     precisions_for_relevant_docs = precisions * relevant_mask
+
+    # Avoid division by zero
+    relevant_sum = relevant_mask.sum()
+    if relevant_sum == 0:
+        # Retains gradients
+        return precisions_for_relevant_docs.sum() * 0
 
     # If you get a division by 0 error here late in the training, ask Henry
     return precisions_for_relevant_docs.sum() / relevant_mask.sum()
@@ -61,6 +66,10 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
                 top_k_idxs_1d=temp_switched_idxs,
                 relevant_doc_idxs=relevant_doc_idxs
             )
+
+            print(f"l_r = {l_r}")
+            print(f"orig_ap_10 = {orig_ap_10}")
+            print(f"switched_ap_10 = {switched_ap_10}")
 
             loss += ((switched_ap_10 - orig_ap_10) * l_r)
 
