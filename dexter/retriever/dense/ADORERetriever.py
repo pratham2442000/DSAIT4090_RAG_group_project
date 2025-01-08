@@ -23,9 +23,9 @@ RANKING_CUTOFF = 10
 similarity_metric = CosineSimilarity()
 ranks = torch.arange(1, RANKING_CUTOFF + 1, device='cuda' if torch.cuda.is_available() else 'cpu')
 
-def calculate_ap_10(top_k_idxs: Tensor, relevant_doc_idxs: Tensor) -> Tensor:
+def calculate_ap_10(top_k_idxs_1d: Tensor, relevant_doc_idxs: Tensor) -> Tensor:
 
-    top_10_idxs = top_k_idxs[:RANKING_CUTOFF]
+    top_10_idxs = top_k_idxs_1d[:RANKING_CUTOFF]
     relevant_mask = torch.isin(top_10_idxs, relevant_doc_idxs).float()
     cum_relevance = torch.cumsum(relevant_mask, dim=0)
     precisions = cum_relevance / ranks
@@ -35,7 +35,7 @@ def calculate_ap_10(top_k_idxs: Tensor, relevant_doc_idxs: Tensor) -> Tensor:
     # If you get a division by 0 error here late in the training, ask Henry
     return precisions_for_relevant_docs.sum() / relevant_mask.sum()
 
-def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_hard_negative_idxs: Tensor, similarity_scores_1d: Tensor, top_k_idxs: Tensor):
+def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_hard_negative_idxs: Tensor, similarity_scores_1d: Tensor, top_k_idxs_1d: Tensor):
 
     loss = 0
 
@@ -44,11 +44,11 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
             l_r = torch.log(1 + torch.exp(similarity_scores_1d[hard_negative_idx] - similarity_scores_1d[rel_doc_idx]))
 
             orig_ap_10 = calculate_ap_10(
-                top_k_idxs=top_k_idxs,
+                top_k_idxs_1d=top_k_idxs_1d,
                 relevant_doc_idxs=relevant_doc_idxs
             )
 
-            temp_switched_idxs = top_k_idxs.clone()
+            temp_switched_idxs = top_k_idxs_1d.clone()
             temp_switched_idxs.requires_grad = False
 
             relevant_pos = (temp_switched_idxs == rel_doc_idx).nonzero(as_tuple=True)[0]
@@ -58,7 +58,7 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
             temp_switched_idxs[negative_pos] = rel_doc_idx
 
             switched_ap_10 = calculate_ap_10(
-                top_k_idxs=temp_switched_idxs,
+                top_k_idxs_1d=temp_switched_idxs,
                 relevant_doc_idxs=relevant_doc_idxs
             )
 
@@ -182,7 +182,7 @@ class ADORERetriever(HfRetriever):
                         relevant_doc_idxs=qrels_tensor_dict[query.id()],
                         all_hard_negative_idxs=all_hard_negative_idxs,
                         similarity_scores_1d=similarity_scores[q_idx],
-                        top_k_idxs=top_k_idxs[q_idx]
+                        top_k_idxs_1d=top_k_idxs[q_idx]
                     )
 
                 loss = batch_total_loss / len(cur_queries)
