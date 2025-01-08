@@ -3,6 +3,7 @@ from typing import Dict, List, Union, Tuple, Any
 import os
 import joblib
 import math
+import random
 
 from torch import Tensor
 from torch.optim import AdamW
@@ -19,55 +20,22 @@ from dexter.retriever.dense.HfRetriever import HfRetriever
 from dexter.utils.metrics.SimilarityMatch import CosineSimilarity, DotScore
 
 RANKING_CUTOFF = 10
-similarity_metric = DotScore()
-log_values_for_ndcg = 1 / torch.log(torch.arange(2,2 + RANKING_CUTOFF,dtype=torch.float,device="cuda" if torch.cuda.is_available() else "cpu"))
+similarity_metric = CosineSimilarity()
+ranks = torch.arange(1, RANKING_CUTOFF + 1, device='cuda' if torch.cuda.is_available() else 'cpu')
 
+def calculate_ap_10(top_k_idxs: Tensor, relevant_doc_idxs: Tensor) -> Tensor:
 
-def calculate_rr(all_doc_idxs, relevant_doc_idxs_set):
-    rr = 0
-    for rank, doc_idx in enumerate(all_doc_idxs, start=1):
-        # If a relevant doc is not in the first 10 then we punish the model severely.
-        if rank > RANKING_CUTOFF:
-            break
+    top_10_idxs = top_k_idxs[:RANKING_CUTOFF]
+    relevant_mask = torch.isin(top_10_idxs, relevant_doc_idxs).float()
+    cum_relevance = torch.cumsum(relevant_mask, dim=0)
+    precisions = cum_relevance / ranks
 
-        if doc_idx in relevant_doc_idxs_set:
-            rr = 1 / rank
-            break
-    return rr
+    precisions_for_relevant_docs = precisions * relevant_mask
 
-def calculate_ncdg_10(sorted_all_idxs: Tensor, similarity_scores_1d: Tensor, sorted_relevant_idxs: Tensor):
-    """
-    All 1d tensors
+    # If you get a division by 0 error here late in the training, ask Henry
+    return precisions_for_relevant_docs.sum() / relevant_mask.sum()
 
-    Args:
-        sorted_all_idxs: IDXS of hard-negatives and relevant docs combined sorted according to similarity scores
-        similarity_scores_1d: The similarity scores for the whole corpus for that query in no particular order (1D tensor)
-        sorted_relevant_idxs: IDXS of relevant docs sorted according to similarity scores
-
-    Returns: the NCDG@10
-
-    """
-    sorted_scores = similarity_scores_1d[sorted_all_idxs]
-    dcg = torch.sum(sorted_scores[:RANKING_CUTOFF] * log_values_for_ndcg)
-
-    ideal_order = torch.cat((sorted_relevant_idxs, sorted_all_idxs[~torch.isin(sorted_all_idxs, sorted_relevant_idxs)]))
-    sorted_ideal_order_scores = similarity_scores_1d[ideal_order]
-    idcg = torch.sum(sorted_ideal_order_scores[:RANKING_CUTOFF] * log_values_for_ndcg)
-
-    return dcg / idcg
-
-
-def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_hard_negative_idxs: Tensor, similarity_scores_1d: Tensor):
-
-
-    relevant_scores = similarity_scores_1d[relevant_doc_idxs]
-    hard_negative_scores = similarity_scores_1d[all_hard_negative_idxs]
-
-    all_scores = torch.cat([relevant_scores, hard_negative_scores])
-    all_doc_idxs = torch.cat([relevant_doc_idxs, all_hard_negative_idxs])
-    sorted_temp = torch.argsort(all_scores, descending=True)
-    sorted_all_idxs = all_doc_idxs[sorted_temp]
-    sorted_relevant_idxs = relevant_doc_idxs[torch.argsort(similarity_scores_1d[relevant_doc_idxs], descending=True)]
+def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_hard_negative_idxs: Tensor, similarity_scores_1d: Tensor, top_k_idxs: Tensor):
 
     loss = 0
 
@@ -75,28 +43,26 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
         for hard_negative_idx in all_hard_negative_idxs:
             l_r = torch.log(1 + torch.exp(similarity_scores_1d[hard_negative_idx] - similarity_scores_1d[rel_doc_idx]))
 
-            orig_ndcg_10 = calculate_ncdg_10(
-                sorted_all_idxs=sorted_all_idxs,
-                similarity_scores_1d=similarity_scores_1d,
-                sorted_relevant_idxs=sorted_relevant_idxs
+            orig_ap_10 = calculate_ap_10(
+                top_k_idxs=top_k_idxs,
+                relevant_doc_idxs=relevant_doc_idxs
             )
 
-            temp_switched_idxs = sorted_all_idxs.clone()
+            temp_switched_idxs = top_k_idxs.clone()
             temp_switched_idxs.requires_grad = False
 
-            relevant_pos = torch.where(temp_switched_idxs == rel_doc_idx)
-            negative_pos = torch.where(temp_switched_idxs == hard_negative_idx)
+            relevant_pos = (temp_switched_idxs == rel_doc_idx).nonzero(as_tuple=True)[0]
+            negative_pos = (temp_switched_idxs == hard_negative_idx).nonzero(as_tuple=True)[0]
 
             temp_switched_idxs[relevant_pos] = hard_negative_idx
             temp_switched_idxs[negative_pos] = rel_doc_idx
 
-            switched_ndcg_10 =  calculate_ncdg_10(
-                sorted_all_idxs=temp_switched_idxs,
-                similarity_scores_1d=similarity_scores_1d,
-                sorted_relevant_idxs=sorted_relevant_idxs
+            switched_ap_10 = calculate_ap_10(
+                top_k_idxs=temp_switched_idxs,
+                relevant_doc_idxs=relevant_doc_idxs
             )
 
-            loss += ((switched_ndcg_10 - orig_ndcg_10) * l_r)
+            loss += ((switched_ap_10 - orig_ap_10) * l_r)
 
     return loss / (len(relevant_doc_idxs) * len(all_hard_negative_idxs))
 
@@ -158,7 +124,7 @@ class ADORERetriever(HfRetriever):
 
         device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
-        # This method will encode the corpus if the index is not present, otherwise it will use the index
+        # Encode the corpus if necessary
         self.encode_corpus_for_training(corpus)
 
         # sanity check
@@ -188,6 +154,9 @@ class ADORERetriever(HfRetriever):
         progress_bar = tqdm(range(num_training_steps), "Epoch progress")
 
         for epoch in range(n_epochs):
+            # poor man's data loader, we shuffle at each epoch, we can not do this using tensors, query id is a string
+            random.shuffle(queries)
+
             for i in range(0, len(queries), self.batch_size):
                 cur_queries = queries[i : i + self.batch_size]
                 query_embeddings = self.encode_queries(cur_queries)
@@ -212,7 +181,8 @@ class ADORERetriever(HfRetriever):
                     batch_total_loss += compute_loss_for_query_and_hard_negatives(
                         relevant_doc_idxs=qrels_tensor_dict[query.id()],
                         all_hard_negative_idxs=all_hard_negative_idxs,
-                        similarity_scores_1d=similarity_scores[q_idx]
+                        similarity_scores_1d=similarity_scores[q_idx],
+                        top_k_idxs=top_k_idxs
                     )
 
                 loss = batch_total_loss / len(cur_queries)
