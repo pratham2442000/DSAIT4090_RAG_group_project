@@ -67,10 +67,6 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
                 relevant_doc_idxs=relevant_doc_idxs
             )
 
-            print(f"l_r = {l_r}")
-            print(f"orig_ap_10 = {orig_ap_10}")
-            print(f"switched_ap_10 = {switched_ap_10}")
-
             loss += ((switched_ap_10 - orig_ap_10) * l_r)
 
     return loss / (len(relevant_doc_idxs) * len(all_hard_negative_idxs))
