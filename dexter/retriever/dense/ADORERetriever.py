@@ -182,7 +182,7 @@ class ADORERetriever(HfRetriever):
                         relevant_doc_idxs=qrels_tensor_dict[query.id()],
                         all_hard_negative_idxs=all_hard_negative_idxs,
                         similarity_scores_1d=similarity_scores[q_idx],
-                        top_k_idxs=top_k_idxs
+                        top_k_idxs=top_k_idxs[q_idx]
                     )
 
                 loss = batch_total_loss / len(cur_queries)
