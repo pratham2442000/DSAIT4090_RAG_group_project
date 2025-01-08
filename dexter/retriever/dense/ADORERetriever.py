@@ -83,20 +83,20 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
                 sorted_relevant_idxs=sorted_relevant_idxs
             )
 
-            relevant_pos = torch.where(sorted_all_idxs == rel_doc_idx)
-            negative_pos = torch.where(sorted_all_idxs == hard_negative_idx)
+            temp_switched_idxs = sorted_all_idxs.clone()
+            temp_switched_idxs.requires_grad = False
 
-            sorted_all_idxs[relevant_pos] = hard_negative_idx
-            sorted_all_idxs[negative_pos] = rel_doc_idx
+            relevant_pos = torch.where(temp_switched_idxs == rel_doc_idx)
+            negative_pos = torch.where(temp_switched_idxs == hard_negative_idx)
+
+            temp_switched_idxs[relevant_pos] = hard_negative_idx
+            temp_switched_idxs[negative_pos] = rel_doc_idx
 
             switched_ndcg_10 =  calculate_ncdg_10(
-                sorted_all_idxs=sorted_all_idxs,
+                sorted_all_idxs=temp_switched_idxs,
                 similarity_scores_1d=similarity_scores_1d,
                 sorted_relevant_idxs=sorted_relevant_idxs
             )
-
-            sorted_all_idxs[relevant_pos] = rel_doc_idx
-            sorted_all_idxs[negative_pos] = hard_negative_idx
 
             loss += ((switched_ndcg_10 - orig_ndcg_10) * l_r)
 
