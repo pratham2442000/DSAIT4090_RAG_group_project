@@ -67,7 +67,7 @@ def compute_loss_for_query_and_hard_negatives(relevant_doc_idxs: Tensor, all_har
                 relevant_doc_idxs=relevant_doc_idxs
             )
 
-            loss += ((switched_ap_10 - orig_ap_10) * l_r)
+            loss += (torch.abs(switched_ap_10 - orig_ap_10) * l_r)
 
     return loss / (len(relevant_doc_idxs) * len(all_hard_negative_idxs))
 
