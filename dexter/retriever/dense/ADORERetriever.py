@@ -163,6 +163,10 @@ class ADORERetriever(HfRetriever):
             random.shuffle(queries)
 
             for i in range(0, len(queries), self.batch_size):
+
+                # reset gradients
+                optimizer.zero_grad()
+
                 cur_queries = queries[i : i + self.batch_size]
                 query_embeddings = self.encode_queries(cur_queries)
 
@@ -195,7 +199,6 @@ class ADORERetriever(HfRetriever):
                 loss.backward()
                 optimizer.step()
                 lr_scheduler.step()
-                optimizer.zero_grad()
                 progress_bar.update(1)
 
         # take it out of training mode
