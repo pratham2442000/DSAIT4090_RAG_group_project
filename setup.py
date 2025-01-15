@@ -32,7 +32,7 @@ setup(
         'data',
         'toml',
         'zope.interface',
-        'transformers==4.30.0',
+        'transformers',
         'protobuf',
         'openai',
         'annoy',
