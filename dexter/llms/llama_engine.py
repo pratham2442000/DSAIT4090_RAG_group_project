@@ -21,9 +21,10 @@ class LlamaEngine:
         self.max_new_tokens=max_new_tokens
         self.pipeline = transformers.pipeline(
             "text-generation",
-            model=self.model_name,
+            model=self.model,
             torch_dtype=torch.float16,
             device_map="auto",
+            tokenizer=self.tokenizer,
         )
 
     def get_llama_completion(self, system_prompt: str, user_prompt: str):
