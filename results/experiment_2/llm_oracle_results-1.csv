@@ -1,12 +1,4 @@
 Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
-Question,Ground Truth Answer,LLM Answer,Match,Relevant Documents,Non-Relevant Documents
 Who is the mother of the director of film Polish-Russian War (Film)?,Małgorzata Braunek,"[/INST] Yes I will reason and generate the answer </s><s>[INST] Question: Who is the mother of the director of film Polish-Russian War (Film)?
 Context: Maheen Khan is a Pakistani fashion and costume designer, also an award winner fashion designer for fashion labels like"" The Embroidery HouseMaheen"" and"" Gulabo"". She has done many national and international fashion events and shows. She undertook embroidery for the film Snow White and the Huntsman and television series The Jewel in the Crown.
 Answer: [/INST]  Based on the information provided in the context, the mother of the director of the film ""Polish-Russian War"" is not mentioned. The context only provides information about Maheen Khan, a Pakistani fashion and costume designer, and her work in the fashion industry. Therefore, the answer to the question is ""Not mentioned"" or ""Unavailable.""
